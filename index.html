@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Спільний Список Покупок</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .list-item:hover .delete-btn {
+            opacity: 1;
+        }
+        .delete-btn {
+            opacity: 0;
+            transition: opacity 0.2s ease-in-out;
+        }
+        /* Hide number input arrows */
+        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+    </style>
+</head>
+<body class="bg-blue-50 text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-6 max-w-4xl">
+        <header class="text-center mb-6">
+            <h1 class="text-4xl font-bold text-gray-900">Спільний Список Покупок</h1>
+            <p class="text-gray-600 mt-2">Створюйте списки та діліться ними з друзями в реальному часі.</p>
+        </header>
+
+        <!-- User Info and Loading Indicator -->
+        <div id="loading" class="text-center p-4 bg-white rounded-lg shadow-md mb-6">
+            <p class="text-lg font-medium">Завантаження даних...</p>
+        </div>
+
+        <div id="userInfo" class="hidden text-center p-4 bg-blue-100 rounded-lg shadow-md mb-6">
+            <p class="text-sm text-gray-600">Ваш ID для обміну:</p>
+            <div class="flex items-center justify-center mt-2">
+                <span id="userId" class="font-mono bg-gray-200 text-gray-700 rounded-md px-4 py-2 text-lg"></span>
+                <button id="copyUserId" class="ml-3 bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                </button>
+            </div>
+             <p id="copy-feedback" class="text-green-500 text-sm mt-2 h-4"></p>
+        </div>
+
+        <main class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- My List Section -->
+            <div class="bg-blue-100 p-6 rounded-lg shadow-md flex flex-col">
+                <h2 class="text-2xl font-semibold mb-4 border-b border-blue-200 pb-2">Мій список</h2>
+                <div class="flex mb-4">
+                    <input type="text" id="newItemInput" placeholder="Додати новий товар..." class="flex-grow border border-gray-300 rounded-l-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <button id="addItemBtn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold p-3 rounded-r-lg transition duration-300">Додати</button>
+                </div>
+                <ul id="myShoppingList" class="space-y-2 flex-grow">
+                    <!-- My list items will be injected here -->
+                </ul>
+                <div class="text-right font-semibold text-lg mt-4 pt-4 border-t border-blue-200 space-y-1">
+                    <p>Разом: <span id="myListTotalAll" class="text-gray-700">0.00</span> грн</p>
+                    <p class="font-bold">Сплачено: <span id="myListTotalPurchased" class="text-blue-600 text-xl">0.00</span> грн</p>
+                </div>
+            </div>
+
+            <!-- Shared List Section -->
+            <div class="bg-blue-100 p-6 rounded-lg shadow-md flex flex-col">
+                <h2 class="text-2xl font-semibold mb-4 border-b border-blue-200 pb-2">Список друга</h2>
+                <div class="flex mb-4">
+                    <input type="text" id="friendIdInput" placeholder="Введіть ID друга..." class="flex-grow border border-gray-300 rounded-l-lg p-3 focus:outline-none focus:ring-2 focus:ring-green-500">
+                    <button id="loadFriendListBtn" class="bg-green-500 hover:bg-green-600 text-white font-bold p-3 rounded-r-lg transition duration-300">Завантажити</button>
+                </div>
+                 <div id="friend-info" class="mb-2 h-6"></div>
+                <ul id="friendShoppingList" class="space-y-2 flex-grow">
+                    <!-- Friend's list items will be injected here -->
+                </ul>
+                 <div class="text-right font-semibold text-lg mt-4 pt-4 border-t border-blue-200 space-y-1">
+                    <p>Разом: <span id="friendListTotalAll" class="text-gray-700">0.00</span> грн</p>
+                    <p class="font-bold">Сплачено: <span id="friendListTotalPurchased" class="text-green-600 text-xl">0.00</span> грн</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        // --- Firebase Configuration ---
+        // !!! ВАЖЛИВО: Замініть ці дані на ваші власні з Firebase Console !!!
+        // 1. Перейдіть на https://console.firebase.google.com/
+        // 2. Створіть новий проект (або використайте існуючий).
+        // 3. Перейдіть в "Налаштування проекту" (значок шестірні).
+        // 4. Прокрутіть до розділу "Ваші додатки" і натисніть на значок веб-додатку "</>".
+        // 5. Зареєструйте додаток (дайте йому будь-яку назву).
+        // 6. Скопіюйте об'єкт `firebaseConfig` і вставте його сюди.
+const firebaseConfig = {
+  apiKey: "AIzaSyDGzwyNxeDsikrfvWLS4X7DRrcMIo2YAcE",
+  authDomain: "spisok-66b91.firebaseapp.com",
+  projectId: "spisok-66b91",
+  storageBucket: "spisok-66b91.firebasestorage.app",
+  messagingSenderId: "55346795106",
+  appId: "1:55346795106:web:0d83634cd385b9955a373b"
+};
+        
+        // --- FIX: Check for placeholder config ---
+        if (firebaseConfig.apiKey === "YOUR_API_KEY") {
+            const loadingDiv = document.getElementById('loading');
+            loadingDiv.innerHTML = `
+                <p class="text-red-600 font-bold text-lg">Помилка: Не знайдено конфігурацію Firebase!</p>
+                <p class="text-gray-600 mt-2">Будь ласка, відредагуйте цей HTML-файл, знайдіть об'єкт <strong>firebaseConfig</strong> та вставте ваші власні ключі з <a href="https://console.firebase.google.com/" target="_blank" class="text-blue-600 underline">Firebase Console</a>.</p>
+            `;
+            throw new Error("Firebase config is not set. Please update the firebaseConfig object in the script.");
+        }
+
+        // Це унікальний ідентифікатор вашого додатку. Можете залишити як є.
+        const appId = 'shared-shopping-list-app'; 
+
+        // --- Firebase Imports ---
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, collection, onSnapshot, addDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- Firebase Initialization ---
+        let app, auth, db;
+        let currentUserId = null;
+        let unsubscribeMyList = null;
+        let unsubscribeFriendList = null;
+
+        try {
+            app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+        } catch (e) {
+            console.error("Error initializing Firebase:", e);
+            document.getElementById('loading').innerText = "Помилка ініціалізації. Перевірте конфігурацію Firebase.";
+        }
+        
+        // --- DOM Elements ---
+        const loadingDiv = document.getElementById('loading');
+        const userInfoDiv = document.getElementById('userInfo');
+        const userIdSpan = document.getElementById('userId');
+        const copyUserIdBtn = document.getElementById('copyUserId');
+        const copyFeedback = document.getElementById('copy-feedback');
+        
+        const newItemInput = document.getElementById('newItemInput');
+        const addItemBtn = document.getElementById('addItemBtn');
+        const myShoppingListUl = document.getElementById('myShoppingList');
+        const myListTotalAll = document.getElementById('myListTotalAll');
+        const myListTotalPurchased = document.getElementById('myListTotalPurchased');
+
+        const friendIdInput = document.getElementById('friendIdInput');
+        const loadFriendListBtn = document.getElementById('loadFriendListBtn');
+        const friendShoppingListUl = document.getElementById('friendShoppingList');
+        const friendInfoDiv = document.getElementById('friend-info');
+        const friendListTotalAll = document.getElementById('friendListTotalAll');
+        const friendListTotalPurchased = document.getElementById('friendListTotalPurchased');
+
+        // --- Authentication ---
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                currentUserId = user.uid;
+                userIdSpan.textContent = currentUserId;
+                loadingDiv.classList.add('hidden');
+                userInfoDiv.classList.remove('hidden');
+                setupMyListListener(currentUserId);
+            } else {
+                try {
+                    await signInAnonymously(auth);
+                } catch (error) {
+                    console.error("Authentication failed:", error);
+                    loadingDiv.innerText = "Помилка автентифікації.";
+                }
+            }
+        });
+
+        // --- UI Rendering ---
+        function createListItem(item, listOwnerId) {
+            const li = document.createElement('li');
+            li.className = 'list-item flex items-center justify-between bg-white p-2 rounded-lg shadow-sm';
+            li.dataset.id = item.id;
+
+            // --- Left side container (Checkbox and Name) ---
+            const leftContainer = document.createElement('div');
+            leftContainer.className = 'flex items-center gap-2';
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.checked = item.purchased;
+            checkbox.className = 'form-checkbox h-5 w-5 text-blue-600 rounded ml-2 cursor-pointer flex-shrink-0 focus:ring-blue-500';
+            checkbox.addEventListener('change', () => toggleItemPurchased(listOwnerId, item.id, checkbox.checked));
+
+            const span = document.createElement('span');
+            span.textContent = item.name;
+            span.className = `${item.purchased ? 'line-through text-gray-500' : ''}`;
+
+            leftContainer.appendChild(checkbox);
+            leftContainer.appendChild(span);
+
+            // --- Right side container (Price and Delete Button) ---
+            const rightContainer = document.createElement('div');
+            rightContainer.className = 'flex items-center gap-2';
+
+            // Price Container for toggling between text and input
+            const priceContainer = document.createElement('div');
+            priceContainer.className = 'flex items-center';
+
+            const priceDisplay = document.createElement('span');
+            priceDisplay.textContent = (item.price || 0).toFixed(2);
+            priceDisplay.className = 'cursor-pointer p-1';
+
+            const priceInput = document.createElement('input');
+            priceInput.type = 'number';
+            priceInput.value = (item.price || 0).toFixed(2);
+            priceInput.className = 'w-20 border border-gray-300 rounded p-1 text-right focus:outline-none focus:ring-1 focus:ring-blue-500 hidden';
+            priceInput.step = '0.01';
+            priceInput.min = '0';
+
+            const currencySpan = document.createElement('span');
+            currencySpan.textContent = 'грн';
+            currencySpan.className = 'text-gray-500 ml-1';
+
+            priceContainer.appendChild(priceDisplay);
+            priceContainer.appendChild(priceInput);
+            priceContainer.appendChild(currencySpan);
+
+            // Toggle logic for price editing
+            priceDisplay.addEventListener('click', () => {
+                priceDisplay.classList.add('hidden');
+                priceInput.classList.remove('hidden');
+                priceInput.focus();
+                priceInput.select();
+            });
+
+            const updateAndSwitchBack = () => {
+                const newPriceValue = parseFloat(priceInput.value) || 0;
+                updateItemPrice(listOwnerId, item.id, newPriceValue);
+                priceDisplay.textContent = newPriceValue.toFixed(2);
+                priceInput.classList.add('hidden');
+                priceDisplay.classList.remove('hidden');
+            };
+
+            priceInput.addEventListener('blur', updateAndSwitchBack);
+            priceInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    priceInput.blur();
+                }
+            });
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.innerHTML = '&#x1F5D1;'; // Trash can icon
+            deleteBtn.className = 'delete-btn text-red-500 hover:text-red-700 font-bold text-xl flex-shrink-0';
+            deleteBtn.addEventListener('click', () => deleteItem(listOwnerId, item.id));
+            
+            rightContainer.appendChild(priceContainer);
+            rightContainer.appendChild(deleteBtn);
+
+            li.appendChild(leftContainer);
+            li.appendChild(rightContainer);
+            
+            return li;
+        }
+
+        function renderList(listElement, items, listOwnerId, totalAllElement, totalPurchasedElement) {
+            listElement.innerHTML = '';
+            let totalAll = 0;
+            let totalPurchased = 0;
+            
+            if (items.length === 0) {
+                listElement.innerHTML = `<li class="text-gray-500 text-center p-4">Список порожній.</li>`;
+            } else {
+                items.sort((a, b) => (a.createdAt?.toDate() || 0) - (b.createdAt?.toDate() || 0));
+                items.forEach(item => {
+                    const itemPrice = parseFloat(item.price) || 0;
+                    totalAll += itemPrice;
+                    if (item.purchased) {
+                        totalPurchased += itemPrice;
+                    }
+                    const listItemElement = createListItem(item, listOwnerId);
+                    listElement.appendChild(listItemElement);
+                });
+            }
+            totalAllElement.textContent = totalAll.toFixed(2);
+            totalPurchasedElement.textContent = totalPurchased.toFixed(2);
+        }
+
+        // --- Firestore Logic ---
+        function setupMyListListener(uid) {
+            if (unsubscribeMyList) unsubscribeMyList();
+            const collectionPath = `/artifacts/${appId}/users/${uid}/shopping-list`;
+            const q = collection(db, collectionPath);
+            unsubscribeMyList = onSnapshot(q, (querySnapshot) => {
+                const items = [];
+                querySnapshot.forEach((doc) => items.push({ id: doc.id, ...doc.data() }));
+                renderList(myShoppingListUl, items, uid, myListTotalAll, myListTotalPurchased);
+            }, (error) => console.error("Error listening to my list:", error));
+        }
+        
+        function setupFriendListListener(uid) {
+            if (unsubscribeFriendList) unsubscribeFriendList();
+            friendShoppingListUl.innerHTML = '<li class="text-gray-500 text-center p-4">Завантаження списку друга...</li>';
+            const collectionPath = `/artifacts/${appId}/users/${uid}/shopping-list`;
+            const q = collection(db, collectionPath);
+            unsubscribeFriendList = onSnapshot(q, (querySnapshot) => {
+                const items = [];
+                querySnapshot.forEach((doc) => items.push({ id: doc.id, ...doc.data() }));
+                renderList(friendShoppingListUl, items, uid, friendListTotalAll, friendListTotalPurchased);
+                friendInfoDiv.innerHTML = `<p class="text-sm text-green-600">Список користувача <strong>${uid.substring(0, 8)}...</strong> завантажено.</p>`;
+            }, (error) => {
+                console.error("Error listening to friend's list:", error);
+                friendShoppingListUl.innerHTML = `<li class="text-red-500 text-center p-4">Не вдалося завантажити список.</li>`;
+                friendInfoDiv.innerHTML = `<p class="text-sm text-red-600">Помилка завантаження.</p>`;
+            });
+        }
+
+        async function addItem() {
+            const itemName = newItemInput.value.trim();
+            if (itemName && currentUserId) {
+                try {
+                    const collectionPath = `/artifacts/${appId}/users/${currentUserId}/shopping-list`;
+                    await addDoc(collection(db, collectionPath), {
+                        name: itemName,
+                        price: 0,
+                        purchased: false,
+                        createdAt: new Date()
+                    });
+                    newItemInput.value = '';
+                } catch (error) {
+                    console.error("Error adding document: ", error);
+                }
+            }
+        }
+
+        async function updateItemPrice(ownerId, itemId, newPrice) {
+            try {
+                const docPath = `/artifacts/${appId}/users/${ownerId}/shopping-list/${itemId}`;
+                await updateDoc(doc(db, docPath), { price: newPrice });
+            } catch (error) {
+                console.error("Error updating price: ", error);
+            }
+        }
+
+        async function toggleItemPurchased(ownerId, itemId, isPurchased) {
+            try {
+                const docPath = `/artifacts/${appId}/users/${ownerId}/shopping-list/${itemId}`;
+                await updateDoc(doc(db, docPath), { purchased: isPurchased });
+            } catch (error) {
+                console.error("Error updating document: ", error);
+            }
+        }
+
+        async function deleteItem(ownerId, itemId) {
+            try {
+                const docPath = `/artifacts/${appId}/users/${ownerId}/shopping-list/${itemId}`;
+                await deleteDoc(doc(db, docPath));
+            } catch (error) {
+                console.error("Error deleting document: ", error);
+            }
+        }
+
+        // --- Event Listeners ---
+        addItemBtn.addEventListener('click', addItem);
+        newItemInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') addItem(); });
+
+        loadFriendListBtn.addEventListener('click', () => {
+            const friendId = friendIdInput.value.trim();
+            if (friendId) {
+                if(friendId === currentUserId) {
+                    friendInfoDiv.innerHTML = `<p class="text-sm text-yellow-600">Це ваш власний ID.</p>`;
+                    return;
+                }
+                setupFriendListListener(friendId);
+            }
+        });
+        
+        copyUserIdBtn.addEventListener('click', () => {
+            const textarea = document.createElement('textarea');
+            textarea.value = currentUserId;
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                document.execCommand('copy');
+                copyFeedback.textContent = 'ID скопійовано!';
+                setTimeout(() => { copyFeedback.textContent = '' }, 2000);
+            } catch (err) {
+                console.error('Fallback: Oops, unable to copy', err);
+                copyFeedback.textContent = 'Помилка копіювання';
+            }
+            document.body.removeChild(textarea);
+        });
+
+    </script>
+</body>
+</html>
